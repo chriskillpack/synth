@@ -1,6 +1,6 @@
 # Subtractive Synth
 
-A browser-based monophonic subtractive synthesizer inspired by classic Moog synths. All DSP is implemented from scratch in a Web Audio AudioWorklet — no built-in OscillatorNode or BiquadFilterNode.
+A browser-based polyphonic subtractive synthesizer inspired by classic Moog synths. All DSP is implemented from scratch in a Web Audio AudioWorklet — no built-in OscillatorNode or BiquadFilterNode.
 
 Built as a learning project to understand how synthesizers work at the sample level, with help from [Claude](https://claude.ai).
 
@@ -9,7 +9,7 @@ Built as a learning project to understand how synthesizers work at the sample le
 - **4 waveforms**: Sine, Saw, Square, Triangle — with PolyBLEP anti-aliasing
 - **Low-pass filter**: Biquad with adjustable cutoff and resonance
 - **Two ADSR envelopes**: Amplitude and filter cutoff
-- **Monophonic with last-note priority**: Hold multiple keys, always hear the last one pressed
+- **8-voice polyphony**: Play chords; oldest voice is stolen when all voices are in use
 - **Two-octave keyboard**: Play from your computer keyboard
 - **Real-time oscilloscope**: See the waveform as you play
 - **Visual piano keyboard**: Shows which notes are active
