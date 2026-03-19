@@ -32,13 +32,11 @@ export class SynthEngine {
   }
 
   noteOn(midiNote) {
-    const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
-    this.params.frequency.setValueAtTime(freq, this.ctx.currentTime);
-    this.params.gate.setValueAtTime(1, this.ctx.currentTime);
+    this.node.port.postMessage({ type: 'noteOn', note: midiNote });
   }
 
-  noteOff() {
-    this.params.gate.setValueAtTime(0, this.ctx.currentTime);
+  noteOff(midiNote) {
+    this.node.port.postMessage({ type: 'noteOff', note: midiNote });
   }
 
   setParam(name, value) {

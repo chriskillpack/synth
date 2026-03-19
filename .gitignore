@@ -1,1 +1,4 @@
 .claude/**
+
+# Ignore the built executable
+synth

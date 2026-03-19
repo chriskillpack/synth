@@ -24,12 +24,12 @@ for (const [code, note] of Object.entries(keyMap)) {
   noteLabels[note] = label;
 }
 
-// Last-note priority stack
-const noteStack = [];
+// Track held notes for piano highlight
+const heldNotes = new Set();
 
 function updatePianoHighlight() {
   document.querySelectorAll('.piano-key').forEach(el => {
-    el.classList.toggle('active', noteStack.includes(parseInt(el.dataset.note)));
+    el.classList.toggle('active', heldNotes.has(parseInt(el.dataset.note)));
   });
 }
 
@@ -57,11 +57,8 @@ async function handleKeyDown(e) {
 
   await ensureEngine();
 
-  // Remove if already in stack, then push
-  const idx = noteStack.indexOf(note);
-  if (idx !== -1) noteStack.splice(idx, 1);
-  noteStack.push(note);
-  engine.noteOn(noteStack[noteStack.length - 1]);
+  heldNotes.add(note);
+  engine.noteOn(note);
   updatePianoHighlight();
 }
 
@@ -71,14 +68,8 @@ function handleKeyUp(e) {
   if (note === undefined) return;
   e.preventDefault();
 
-  const idx = noteStack.indexOf(note);
-  if (idx !== -1) noteStack.splice(idx, 1);
-
-  if (noteStack.length === 0) {
-    engine.noteOff();
-  } else {
-    engine.noteOn(noteStack[noteStack.length - 1]);
-  }
+  heldNotes.delete(note);
+  engine.noteOff(note);
   updatePianoHighlight();
 }
 
