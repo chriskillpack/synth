@@ -44,6 +44,7 @@ async function ensureEngine() {
     await engine.init();
     bindSliders();
     setupScope();
+    engine.setHarmonics(Array.from(harmonicWeights));
     engineReady = true;
   })();
   await initPromise;
@@ -218,6 +219,86 @@ function buildPiano() {
   }
 }
 
+// Harmonics bar chart
+const NUM_HARMONICS = 16;
+const harmonicWeights = new Float32Array(NUM_HARMONICS);
+harmonicWeights[0] = 1; // fundamental only by default
+
+let harmonicsCanvas, harmonicsCtx;
+let isDraggingHarmonics = false;
+
+function initHarmonics() {
+  harmonicsCanvas = document.getElementById('harmonics-chart');
+  harmonicsCtx = harmonicsCanvas.getContext('2d');
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = harmonicsCanvas.getBoundingClientRect();
+  harmonicsCanvas.width = rect.width * dpr;
+  harmonicsCanvas.height = rect.height * dpr;
+  harmonicsCtx.scale(dpr, dpr);
+  harmonicsCanvas.drawWidth = rect.width;
+  harmonicsCanvas.drawHeight = rect.height;
+
+  harmonicsCanvas.addEventListener('mousedown', (e) => {
+    isDraggingHarmonics = true;
+    setHarmonicFromEvent(e);
+  });
+  harmonicsCanvas.addEventListener('mousemove', (e) => {
+    if (isDraggingHarmonics) setHarmonicFromEvent(e);
+  });
+  window.addEventListener('mouseup', () => { isDraggingHarmonics = false; });
+
+  drawHarmonics();
+}
+
+function setHarmonicFromEvent(e) {
+  const rect = harmonicsCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const w = harmonicsCanvas.drawWidth;
+  const h = harmonicsCanvas.drawHeight;
+
+  const labelHeight = 16;
+  const barAreaHeight = h - labelHeight;
+
+  const barIndex = Math.floor(x / (w / NUM_HARMONICS));
+  if (barIndex < 0 || barIndex >= NUM_HARMONICS) return;
+
+  const weight = Math.max(0, Math.min(1, 1 - y / barAreaHeight));
+  harmonicWeights[barIndex] = weight;
+
+  if (engine) engine.setHarmonics(Array.from(harmonicWeights));
+  drawHarmonics();
+}
+
+function drawHarmonics() {
+  const w = harmonicsCanvas.drawWidth;
+  const h = harmonicsCanvas.drawHeight;
+  const ctx = harmonicsCtx;
+
+  const labelHeight = 16;
+  const barAreaHeight = h - labelHeight;
+  const barWidth = w / NUM_HARMONICS;
+  const gap = 2;
+
+  ctx.fillStyle = '#0f0f1e';
+  ctx.fillRect(0, 0, w, h);
+
+  for (let i = 0; i < NUM_HARMONICS; i++) {
+    const x = i * barWidth + gap;
+    const barW = barWidth - gap * 2;
+    const barH = harmonicWeights[i] * barAreaHeight;
+
+    ctx.fillStyle = '#e94560';
+    ctx.fillRect(x, barAreaHeight - barH, barW, barH);
+
+    ctx.fillStyle = '#888';
+    ctx.font = '10px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText((i + 1) + 'x', i * barWidth + barWidth / 2, h - 3);
+  }
+}
+
 // Waveform visualization
 let waveformCanvas, waveformCtx;
 
@@ -266,6 +347,7 @@ function setupScope() {
 // Init
 document.addEventListener('DOMContentLoaded', () => {
   buildPiano();
+  initHarmonics();
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
 });

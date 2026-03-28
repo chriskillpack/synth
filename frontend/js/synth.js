@@ -44,4 +44,8 @@ export class SynthEngine {
       this.params[name].setValueAtTime(value, this.ctx.currentTime);
     }
   }
+
+  setHarmonics(weights) {
+    this.node.port.postMessage({ type: 'harmonics', weights });
+  }
 }

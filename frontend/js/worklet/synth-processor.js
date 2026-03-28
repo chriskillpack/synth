@@ -81,12 +81,15 @@ function polyblep(t, dt) {
 
 const NUM_VOICES = 8;
 
+const NUM_HARMONICS = 16;
+
 class Voice {
   constructor() {
     this.note = -1;        // MIDI note, -1 = unassigned
     this.frequency = 440;
     this.phase = 0;
     this.triState = 0;
+    this.harmonicPhases = new Float64Array(NUM_HARMONICS - 1); // harmonics 2x-16x
     this.z1 = 0;
     this.z2 = 0;
     this.ampEnv = new ADSREnvelope();
@@ -116,7 +119,7 @@ class Voice {
   // lfoValue is in range [-1, 1], lfoDepth in [0, 1], lfoDest: 0=pitch, 1=filter, 2=amplitude
   processSample(waveform, filterCutoff, filterResonance, filterEnvAmount,
                 ampA, ampD, ampS, ampR, filtA, filtD, filtS, filtR,
-                lfoValue, lfoDepth, lfoDest) {
+                lfoValue, lfoDepth, lfoDest, harmonicWeights) {
     const sr = globalThis.sampleRate;
     const nyquist = sr / 2;
 
@@ -159,6 +162,20 @@ class Voice {
         sample = this.triState;
         break;
       }
+    }
+
+    // Apply fundamental weight
+    sample *= harmonicWeights[0];
+
+    // Add harmonics 2x-16x as sine waves
+    for (let h = 0; h < NUM_HARMONICS - 1; h++) {
+      const weight = harmonicWeights[h + 1];
+      if (weight === 0) continue;
+      const hFreq = f * (h + 2);
+      if (hFreq >= nyquist) break;
+      this.harmonicPhases[h] += hFreq / sr;
+      this.harmonicPhases[h] -= Math.floor(this.harmonicPhases[h]);
+      sample += weight * Math.sin(2 * Math.PI * this.harmonicPhases[h]);
     }
 
     // Filter envelope
@@ -239,6 +256,8 @@ class SynthProcessor extends AudioWorkletProcessor {
       this.voices.push(new Voice());
     }
     this.lfoPhase = 0;
+    this.harmonicWeights = new Float64Array(NUM_HARMONICS);
+    this.harmonicWeights[0] = 1; // fundamental only by default
 
     this.port.onmessage = (e) => {
       const { type, note } = e.data;
@@ -246,6 +265,10 @@ class SynthProcessor extends AudioWorkletProcessor {
         this.voiceNoteOn(note);
       } else if (type === 'noteOff') {
         this.voiceNoteOff(note);
+      } else if (type === 'harmonics') {
+        for (let i = 0; i < NUM_HARMONICS; i++) {
+          this.harmonicWeights[i] = e.data.weights[i];
+        }
       }
     };
   }
@@ -336,7 +359,7 @@ class SynthProcessor extends AudioWorkletProcessor {
         mix += voice.processSample(
           waveform, filterCutoff, filterResonance, filterEnvAmount,
           ampA, ampD, ampS, ampR, filtA, filtD, filtS, filtR,
-          lfoValue, lfoDepth, lfoDest
+          lfoValue, lfoDepth, lfoDest, this.harmonicWeights
         );
       }
 
