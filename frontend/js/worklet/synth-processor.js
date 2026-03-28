@@ -113,11 +113,18 @@ class Voice {
   }
 
   // Generate one sample. Returns the output value.
+  // lfoValue is in range [-1, 1], lfoDepth in [0, 1], lfoDest: 0=pitch, 1=filter, 2=amplitude
   processSample(waveform, filterCutoff, filterResonance, filterEnvAmount,
-                ampA, ampD, ampS, ampR, filtA, filtD, filtS, filtR) {
+                ampA, ampD, ampS, ampR, filtA, filtD, filtS, filtR,
+                lfoValue, lfoDepth, lfoDest) {
     const sr = globalThis.sampleRate;
     const nyquist = sr / 2;
-    const f = this.frequency;
+
+    // Apply LFO to pitch: modulate frequency by up to +/-2 semitones
+    let f = this.frequency;
+    if (lfoDest === 0 && lfoDepth > 0) {
+      f *= Math.pow(2, lfoValue * lfoDepth * 2 / 12);
+    }
     const dt = f / sr;
 
     // Oscillator
@@ -157,6 +164,10 @@ class Voice {
     // Filter envelope
     const filtEnvLevel = this.filterEnv.process(filtA, filtD, filtS, filtR);
     let cutoff = filterCutoff + filterEnvAmount * filtEnvLevel;
+    // Apply LFO to filter: modulate cutoff by up to +/-4000 Hz
+    if (lfoDest === 1 && lfoDepth > 0) {
+      cutoff += lfoValue * lfoDepth * 4000;
+    }
     cutoff = Math.max(20, Math.min(cutoff, nyquist * 0.9));
 
     // Biquad low-pass coefficients
@@ -188,7 +199,11 @@ class Voice {
     if (Math.abs(this.z2) < 1e-18) this.z2 = 0;
 
     // Amp envelope
-    const ampLevel = this.ampEnv.process(ampA, ampD, ampS, ampR);
+    let ampLevel = this.ampEnv.process(ampA, ampD, ampS, ampR);
+    // Apply LFO to amplitude: modulate between (1-depth) and 1
+    if (lfoDest === 2 && lfoDepth > 0) {
+      ampLevel *= 1 - lfoDepth * 0.5 * (1 - lfoValue);
+    }
 
     return filtered * ampLevel;
   }
@@ -210,6 +225,10 @@ class SynthProcessor extends AudioWorkletProcessor {
       { name: 'filterSustain',   min: 0,     max: 1,     defaultValue: 0.3,  automationRate: 'k-rate' },
       { name: 'filterRelease',   min: 0.001, max: 10,    defaultValue: 0.5,  automationRate: 'k-rate' },
       { name: 'masterVolume',    min: 0,     max: 1,     defaultValue: 0.5,  automationRate: 'k-rate' },
+      { name: 'lfoRate',         min: 0.1,   max: 20,    defaultValue: 5,    automationRate: 'k-rate' },
+      { name: 'lfoDepth',        min: 0,     max: 1,     defaultValue: 0,    automationRate: 'k-rate' },
+      { name: 'lfoWaveform',     min: 0,     max: 2,     defaultValue: 0,    automationRate: 'k-rate' },
+      { name: 'lfoDest',         min: 0,     max: 2,     defaultValue: 0,    automationRate: 'k-rate' },
     ];
   }
 
@@ -219,6 +238,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < NUM_VOICES; i++) {
       this.voices.push(new Voice());
     }
+    this.lfoPhase = 0;
 
     this.port.onmessage = (e) => {
       const { type, note } = e.data;
@@ -282,18 +302,41 @@ class SynthProcessor extends AudioWorkletProcessor {
     const filtS = getParam(parameters.filterSustain, 0);
     const filtR = getParam(parameters.filterRelease, 0);
     const masterVol = getParam(parameters.masterVolume, 0);
+    const lfoRate = getParam(parameters.lfoRate, 0);
+    const lfoDepth = getParam(parameters.lfoDepth, 0);
+    const lfoWaveform = Math.round(getParam(parameters.lfoWaveform, 0));
+    const lfoDest = Math.round(getParam(parameters.lfoDest, 0));
+    const sr = globalThis.sampleRate;
+    const lfoDt = lfoRate / sr;
 
     for (let i = 0; i < numSamples; i++) {
       const filterCutoff = getParam(parameters.filterCutoff, i);
       const filterResonance = getParam(parameters.filterResonance, i);
       const filterEnvAmount = getParam(parameters.filterEnvAmount, i);
 
+      // LFO: compute value [-1, 1]
+      this.lfoPhase += lfoDt;
+      this.lfoPhase -= Math.floor(this.lfoPhase);
+      let lfoValue = 0;
+      switch (lfoWaveform) {
+        case 0: // Sine
+          lfoValue = Math.sin(2 * Math.PI * this.lfoPhase);
+          break;
+        case 1: // Triangle
+          lfoValue = 4 * Math.abs(this.lfoPhase - 0.5) - 1;
+          break;
+        case 2: // Square
+          lfoValue = this.lfoPhase < 0.5 ? 1 : -1;
+          break;
+      }
+
       let mix = 0;
       for (const voice of this.voices) {
         if (voice.isIdle()) continue;
         mix += voice.processSample(
           waveform, filterCutoff, filterResonance, filterEnvAmount,
-          ampA, ampD, ampS, ampR, filtA, filtD, filtS, filtR
+          ampA, ampD, ampS, ampR, filtA, filtD, filtS, filtR,
+          lfoValue, lfoDepth, lfoDest
         );
       }
 

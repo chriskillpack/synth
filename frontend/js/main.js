@@ -82,6 +82,11 @@ function mapTime(pos) {
   return 0.001 * Math.pow(10000, pos);
 }
 
+function mapLfoRate(pos) {
+  // 0.1 to 20 Hz, logarithmic
+  return 0.1 * Math.pow(200, pos);
+}
+
 function formatHz(hz) {
   return hz >= 1000 ? (hz / 1000).toFixed(1) + ' kHz' : Math.round(hz) + ' Hz';
 }
@@ -111,6 +116,10 @@ function bindSliders() {
           value = mapTime(pos);
           label = formatTime(value);
           break;
+        case 'lfo-rate':
+          value = mapLfoRate(pos);
+          label = value.toFixed(1) + ' Hz';
+          break;
         case 'linear':
         default:
           value = pos;
@@ -127,12 +136,19 @@ function bindSliders() {
     update();
   });
 
-  // Waveform select
-  const waveformSelect = document.getElementById('waveform');
-  if (waveformSelect) {
-    waveformSelect.addEventListener('change', () => {
-      if (engine) engine.setParam('waveform', parseInt(waveformSelect.value));
-    });
+  // Select elements
+  const selects = [
+    { id: 'waveform', param: 'waveform' },
+    { id: 'lfo-waveform', param: 'lfoWaveform' },
+    { id: 'lfo-dest', param: 'lfoDest' },
+  ];
+  for (const { id, param } of selects) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => {
+        if (engine) engine.setParam(param, parseInt(el.value));
+      });
+    }
   }
 }
 
