@@ -106,6 +106,32 @@ details.master {
   margin-bottom: 8px;
 }
 
+details.compressor {
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.compressor-layout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+#compressor-curve {
+  width: 150px;
+  height: 150px;
+  background: #0f0f1e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.compressor-controls {
+  flex: 1;
+}
+
 details.harmonics {
   border: 1px solid #333;
   border-radius: 4px;

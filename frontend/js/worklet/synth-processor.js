@@ -79,6 +79,36 @@ function polyblep(t, dt) {
   return 0;
 }
 
+// Dynamic range compressor (operates in dB)
+class Compressor {
+  constructor() {
+    this.envDb = -96;
+  }
+
+  process(sample, thresholdDb, ratio, attackTime, releaseTime) {
+    const sr = globalThis.sampleRate;
+    const absSample = Math.abs(sample);
+    const inputDb = absSample > 1e-6 ? 20 * Math.log10(absSample) : -96;
+
+    // Envelope follower with separate attack/release
+    if (inputDb > this.envDb) {
+      const attackCoeff = Math.exp(-1 / (attackTime * sr));
+      this.envDb = attackCoeff * this.envDb + (1 - attackCoeff) * inputDb;
+    } else {
+      const releaseCoeff = Math.exp(-1 / (releaseTime * sr));
+      this.envDb = releaseCoeff * this.envDb + (1 - releaseCoeff) * inputDb;
+    }
+
+    // Gain reduction above threshold
+    let gainDb = 0;
+    if (this.envDb > thresholdDb) {
+      gainDb = (this.envDb - thresholdDb) * (1 / ratio - 1);
+    }
+
+    return sample * Math.pow(10, gainDb / 20);
+  }
+}
+
 const NUM_VOICES = 8;
 
 const NUM_HARMONICS = 16;
@@ -246,6 +276,10 @@ class SynthProcessor extends AudioWorkletProcessor {
       { name: 'lfoDepth',        min: 0,     max: 1,     defaultValue: 0,    automationRate: 'k-rate' },
       { name: 'lfoWaveform',     min: 0,     max: 2,     defaultValue: 0,    automationRate: 'k-rate' },
       { name: 'lfoDest',         min: 0,     max: 2,     defaultValue: 0,    automationRate: 'k-rate' },
+      { name: 'compThreshold',   min: -60,   max: 0,     defaultValue: -12,  automationRate: 'k-rate' },
+      { name: 'compRatio',       min: 1,     max: 20,    defaultValue: 4,    automationRate: 'k-rate' },
+      { name: 'compAttack',      min: 0.001, max: 0.5,   defaultValue: 0.01, automationRate: 'k-rate' },
+      { name: 'compRelease',     min: 0.001, max: 1,     defaultValue: 0.1,  automationRate: 'k-rate' },
     ];
   }
 
@@ -256,6 +290,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       this.voices.push(new Voice());
     }
     this.lfoPhase = 0;
+    this.compressor = new Compressor();
     this.harmonicWeights = new Float64Array(NUM_HARMONICS);
     this.harmonicWeights[0] = 1; // fundamental only by default
 
@@ -329,6 +364,10 @@ class SynthProcessor extends AudioWorkletProcessor {
     const lfoDepth = getParam(parameters.lfoDepth, 0);
     const lfoWaveform = Math.round(getParam(parameters.lfoWaveform, 0));
     const lfoDest = Math.round(getParam(parameters.lfoDest, 0));
+    const compThreshold = getParam(parameters.compThreshold, 0);
+    const compRatio = getParam(parameters.compRatio, 0);
+    const compAttack = getParam(parameters.compAttack, 0);
+    const compRelease = getParam(parameters.compRelease, 0);
     const sr = globalThis.sampleRate;
     const lfoDt = lfoRate / sr;
 
@@ -363,6 +402,7 @@ class SynthProcessor extends AudioWorkletProcessor {
         );
       }
 
+      mix = this.compressor.process(mix, compThreshold, compRatio, compAttack, compRelease);
       output[i] = mix * masterVol;
     }
 

@@ -128,8 +128,17 @@ function bindSliders() {
           break;
       }
 
+      // Custom labels for compressor params
+      if (param === 'compThreshold') label = value.toFixed(1) + ' dB';
+      else if (param === 'compRatio') label = value.toFixed(1) + ':1';
+
       if (display) display.textContent = label;
       if (engine) engine.setParam(param, value);
+
+      // Redraw compressor curve when threshold or ratio changes
+      if (param === 'compThreshold' || param === 'compRatio') {
+        drawCompressorCurve();
+      }
     };
 
     slider.addEventListener('input', update);
@@ -217,6 +226,109 @@ function buildPiano() {
       whiteIdx++;
     }
   }
+}
+
+// Compressor curve visualization
+let compCurveCanvas, compCurveCtx;
+
+function initCompressorCurve() {
+  compCurveCanvas = document.getElementById('compressor-curve');
+  compCurveCtx = compCurveCanvas.getContext('2d');
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = compCurveCanvas.getBoundingClientRect();
+  compCurveCanvas.width = rect.width * dpr;
+  compCurveCanvas.height = rect.height * dpr;
+  compCurveCtx.scale(dpr, dpr);
+  compCurveCanvas.drawWidth = rect.width;
+  compCurveCanvas.drawHeight = rect.height;
+
+  drawCompressorCurve();
+}
+
+function getCompressorParams() {
+  const threshEl = document.querySelector('[data-param="compThreshold"]');
+  const ratioEl = document.querySelector('[data-param="compRatio"]');
+  return {
+    threshold: parseFloat(threshEl.value),
+    ratio: parseFloat(ratioEl.value),
+  };
+}
+
+function drawCompressorCurve() {
+  if (!compCurveCanvas) return;
+  const w = compCurveCanvas.drawWidth;
+  const h = compCurveCanvas.drawHeight;
+  const ctx = compCurveCtx;
+  const { threshold, ratio } = getCompressorParams();
+
+  const dbMin = -60;
+  const dbMax = 0;
+  const dbRange = dbMax - dbMin;
+  const pad = 4;
+  const plotW = w - pad * 2;
+  const plotH = h - pad * 2;
+
+  const dbToX = (db) => pad + (db - dbMin) / dbRange * plotW;
+  const dbToY = (db) => pad + (1 - (db - dbMin) / dbRange) * plotH;
+
+  ctx.fillStyle = '#0f0f1e';
+  ctx.fillRect(0, 0, w, h);
+
+  // Grid lines every 12 dB
+  ctx.strokeStyle = '#2a2a3e';
+  ctx.lineWidth = 0.5;
+  for (let db = -48; db <= 0; db += 12) {
+    const x = dbToX(db);
+    const y = dbToY(db);
+    ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h - pad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
+  }
+
+  // 1:1 reference line
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(dbToX(dbMin), dbToY(dbMin));
+  ctx.lineTo(dbToX(dbMax), dbToY(dbMax));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Transfer curve
+  ctx.strokeStyle = '#e94560';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i <= plotW; i++) {
+    const inputDb = dbMin + (i / plotW) * dbRange;
+    let outputDb;
+    if (inputDb <= threshold) {
+      outputDb = inputDb;
+    } else {
+      outputDb = threshold + (inputDb - threshold) / ratio;
+    }
+    const x = dbToX(inputDb);
+    const y = dbToY(outputDb);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Threshold marker
+  ctx.fillStyle = '#e94560';
+  ctx.beginPath();
+  ctx.arc(dbToX(threshold), dbToY(threshold), 3, 0, 2 * Math.PI);
+  ctx.fill();
+
+  // Labels
+  ctx.fillStyle = '#666';
+  ctx.font = '9px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('Input dB', w / 2, h - 1);
+  ctx.save();
+  ctx.translate(8, h / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Output dB', 0, 0);
+  ctx.restore();
 }
 
 // Harmonics bar chart
@@ -348,6 +460,7 @@ function setupScope() {
 document.addEventListener('DOMContentLoaded', () => {
   buildPiano();
   initHarmonics();
+  initCompressorCurve();
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
 });

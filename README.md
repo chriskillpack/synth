@@ -9,6 +9,7 @@ Built as a learning project to understand how synthesizers work at the sample le
 - **4 waveforms**: Sine, Saw, Square, Triangle — with PolyBLEP anti-aliasing
 - **Low-pass filter**: Biquad with adjustable cutoff and resonance
 - **16 harmonics**: Additive sine harmonics (2x–16x) layered on the fundamental; click the bar chart to shape timbre
+- **Compressor**: Threshold/ratio dynamics compressor to tame clipping, with interactive transfer curve display
 - **Two ADSR envelopes**: Amplitude and filter cutoff
 - **8-voice polyphony**: Play chords; oldest voice is stolen when all voices are in use
 - **Two-octave keyboard**: Play from your computer keyboard
@@ -38,9 +39,9 @@ White keys are on the letter rows, black keys (sharps/flats) are on the row abov
 ## Signal Chain
 
 ```
-Oscillator + Harmonics ──▶ Low-pass Filter ──▶ Amplifier ──▶ Output
-                               ▲                   ▲
-                         Filter ADSR          Amp ADSR
+Oscillator + Harmonics ──▶ Low-pass Filter ──▶ Compressor ──▶ Amplifier ──▶ Output
+                               ▲                                  ▲
+                         Filter ADSR                         Amp ADSR
 ```
 
 ## How It Works
